@@ -1,10 +1,416 @@
-echo "# spring-cloud-msvc" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/jchaconv/spring-cloud-msvc.git
-git push -u origin main
+Inicio: 10:50
+
+
+Repos del curso:
+
+https://github.com/in28minutes/spring-microservices/tree/master/02.restful-web-services
+https://github.com/in28minutes/spring-microservices/tree/master/03.microservices
+
+
+Mi repo:
+
+https://github.com/jchaconv/spring-cloud-msvc
+
+
+Web Service: Software system design to support
+1*interoperable(otras aplicaciones se pueden comunicar con el ws sin importar las tecnologías en las que estén desarrolladas)
+2*machine-to-machine(or application-to-application) 3*interaction over a network(para ser un ws debe poder ser invocado desde otro lugar).
+
+Service definition:
+Estructura y formato(XML o JSON) de request y response
+Url expuesta para invocación o endpoints
+
+Transport:
+- Http (over the internet)
+- MQ (over a queue)
+
+SOAP (Simple object access protocol) :
+* Es un formato de XML
+
+- Specific way of building ws
+- Solo usa XML
+- Define la estructura de request y response en SOAP-Header y SOAP-Body (ambos contenidos en un SOAP-Envelope)
+- Puede comunicarse mediante HTTP o MQ
+
+- Service definition mediante WSDL (Web service defiinition language)
+   -> Contiene endpoint, operations, request/response structure  
+
+REST (REpresentational state transfer) :
+* Es un "architectural style"
+
+- Utiliza los conceptos presentes en HTTP
+- Request usa los métodos de http(get, post, put, etc)
+- Response incluye los códigos http(200, 404, 500, etc)
+- Los recursos(aquello que se quiere exponer en el ws) tienen URI(uniform resource identifier)
+  y pueden tener representaciones en xml, json(popular), html
+- Solo HTTP 
+- Para el service definition no hay un standard. WADL, SWAGGER son conocidos
+
+
+
+
+Evitar las versiones SNAPSHOT
+version: 3.0.0(M4) -> java17 o superior
+mejor usar 2.x.x
+groupid: com.rest.webservices
+artifactid: restful-web-services
+
+dependencies: springweb, jpa, h2, devtools(optional)
+
+hacer HelloWorldController
+* GetMapping:
+    - de un string
+    - de un obj que tenga campo message (retorna json porque el @ResponseBody incluido
+      en @RestContoller)
+
+Si se quiere agregar debug logging poner esto en properties:
+logging.level.org.springframework=debug
+
+El DispatcherServlet es el componente autoconfigurado que recibe las peticiones y las trata
+en su respectivo controller. 
+
+PathVariable:
+
+/v1/{name}
+@PathVariable String name
+String.format("Hello World, %s", name)
+
+
+Social Media Application Rest API:
+
+Users y Posts api's
+
+- Crear beans : User
+- Crear dao: UserDao -> retorna lista static, aún no se usa JPA/Hibernate
+- En el UserController crear los métodos para findAll, findById, save
+
+
+te voy a enseñar cómo obtener un usuario mediante su id en un api rest
+
+
+http://localhost:8080/api/v1/users
+
+{
+    "name": "Rut",
+    "birthDate": "1992-11-06"
+}
+
+
+200 success
+201 created
+204 no content
+401 unauthorized
+400 bad request
+404 resource not found
+500 Server error
+
+Response status 201 para el save
+- return ResponseEntity.created(null).build(); -> dejar el location como null, cambiar
+  para ver el detalle(Location) del obj creado en Response headers
+
+- findById con return null en el dao y exception en el controller
+  Es importante el @ResponseStatus en el exception para q retorne el statusCode esperado
+
+
+Generic Exception(para personalizar el body response de un error):
+- Crear ErrorDetails
+
+Solo con el UserNotFoundException tenía esta estructura el response:
+
+{
+    "timestamp": "2023-09-22T15:50:14.599+00:00",
+    "status": 404,
+    "error": "Not Found",
+    "path": "/api/v1/users/211"
+}
+
+Luego de agregar la clase CustomizedResponseEntityExceptionHandler donde se usa:
+ 
+- @ControllerAdvice
+- extends ResponseEntityExceptionHandler 
+- @ExceptionHandler(UserNotFoundException.class)
+
+Se ve así(con el body que definimos en ErrorDetails):
+
+{
+    "timestamp": "2023-09-22T11:07:35.5043472",
+    "message": "id: 99",
+    "details": "uri=/api/v1/users/99"
+}
+
+
+DELETE:
+- deleteById en el dao y controller
+Las pruebas salieron bien
+
+-------------------------------------------------------------------------------
+
+
+Validations rest api:
+- Agregar la dependency de validación y actualizar mvn, copiar y pegar la del starter
+- Agregar @Valid de Jakarta en el PostMapping del controller (lo que hace es evaluar las validaciones del objeto Request)
+- Agregar @Past @Size a los campos de User. Mostrar las demás validaciones existentes(abrir ubicación de la clase)
+
+-> en las pruebas retorna 400 Bad Request PERO SIN BODY
+
+- Agregar messages en las validaciones de la clase User
+- Para personalizar hacer un override de handleMethodArgumentNotValid en CustomizedResponseEntityExceptionHandler
+- Reemplazar el getMessage por getFieldError para q solo retorne el mensaje personalizado y no toda la traza. Objects.requireNonNull
+  fue agregado para quitar el warning. Aquí también se puede concatear el ex.getErrorCount para un detalle más personalizado en el message.
+
+- El response salió así:
+{
+    "timestamp": "2023-09-22T11:53:40.3956405",
+    "message": "Name should have at least 3 characters",
+    "details": "uri=/api/v1/users"
+}
+
+
+-------------------------------------------------------------------------------
+
+* Rest Api Documentation
+
+Para entender los resources, actions y req/resp structure (validations)
+Retos para la documentacion: actualizada, correcta y consistente.
+Lo mejor es hacerla desde el código y no mantenerla manualmente.
+
+Swagger y OpenAPI
+
+- googlear springdoc openapi, también abrir el enlace de github (springdoc-openapi-v1)
+- Añadir dependency en el pom. Version 1.7.0 para springboot 2.x.x
+- Ver:
+  http://localhost:8080/swagger-ui.html
+  http://localhost:8080/v3/api-docs
+
+-------------------------------------------------------------------------------
+
+* Content Negotiation
+Mediante el uso de headers se establece si espera format XML o JSON.
+Escoger entre diferentes lenguajes.
+
+- Agregar dependency de jackson, reiniciar y probar
+- Añadir en headers: Accept -> application/xml
+
+
+-------------------------------------------------------------------------------
+
+
+* Internationalization i18n
+
+en English
+nl Dutch
+fr French
+de Deutsch
+
+- Crear messages.properties en resources
+- En HelloWorldController agregar:
+    + MessageSource y constructor
+    + Método getMessageInternationalized()
+- Crear messages_fr.properties e ir modificando según corresponda.
+- Probar agregando: Accept-Language -> fr
+
+
+-------------------------------------------------------------------------------
+
+
+* Versioning Rest API
+Es mejor el versionamiento si se va a cambiar la estructura del response
+para no impactar a los consumers. Es la mejor práctica el versionamiento
+que el cambio en producción.
+- VersioningPersonController
+- Opciones para el versioning:
+ + URI versioning
+    -http://localhost:8080/v1/person
+    -http://localhost:8080/v2/person
+ + Request Parameter versioning
+    -http://localhost:8080/person?version=1
+    -http://localhost:8080/person?version=2
+ + (Custom) headers versioning:
+    -http://localhost:8080/person (X-API-VERSION=1)
+    -http://localhost:8080/person (X-API-VERSION=2)
+ + Media Type versioning (a.k.a "content negotiation" or "accept header")
+    (methods: getFirstVersionOfPersonAcceptHeader and getSecondVersionOfPersonAcceptHeader)
+    (use the header accept)
+    -SAME-URL produces=application/my.own.app-v1+json
+    -SAME-URL produces=application/my.own.app-v2+json
+
+-------------------------------------------------------------------------------
+
+* HATEOAS (Hypermedia as the engine of application state)
+to create links between api's
+
+- Agregar dependency en el pom
+- UserController getUserById, se generó link para allUsers con las clases:
+EntityModel y WebMvcLinkBuilder
+
+http://localhost:8080/api/v1/users/1
+
+{
+    "id": 1,
+    "name": "Julio",
+    "birthDate": "1995-12-12",
+    "_links": {
+        "all-users": {
+            "href": "http://localhost:8080/api/v1/users"
+        }
+    }
+}
+
+-------------------------------------------------------------------------------
+
+* Implementing Static Filtering for REST API
+
+- Serialization: Convert object to STREAM (ex: list to JSON)
+  Serialization in Java with JACKSON
+
+- Customize field names in response. En la clase User:
+    @JsonProperty("user_name")
+    private String name;
+  Ahora el response se ve así:
+  {
+      "id": 1,
+      "birthDate": "1995-12-12",
+      "user_name": "Julio",  <---------
+      "_links": {
+          "all-users": {
+              "href": "http://localhost:8080/api/v1/users"
+          }
+      }
+  }
+
+- Return only selected fields:
+    (FilteringController y SomeBean)
+    -Static filtering:
+        @JsonIgnoreProperties (uno o más) y @JsonIgnore (uno)
+        para que no retorne campo(s)
+    -Dynamic filtering:
+        *Para que usando el mismo bean se pueda manejar diferente lógica de filtering
+        en las api's. Se tiene que manejar en el Controller con MappingJacksonValue y
+        en el bean se define el nombre del filter con @JsonFilter. Me parece mucha lógica
+        y nada práctico.
+
+        *Por ahora he visto que se tiene que agregar el mismo filtering a ambos métodos(por confirmar
+        si se puede usar solo en el que sea necesario porque así no me gusta)
+
+
+-------------------------------------------------------------------------------
+
+* Monitoring APIs with Spring Boot Actuator
+
+Monitoring and manage application in production. Endpoints:
+-beans
+-health
+-metrics
+-mappings
+-etc...
+
+Se agrega dependency al pom.xml
+invocar(hay links a otras api's): http://localhost:8080/actuator
+
+Para exponer todas las api's de actuator agregar en properties:
+
+management.endpoints.web.exposure.include=*
+
+En el endpoint beans están todas las clases y dependencias.
+
+-------------------------------------------------------------------------------
+
+* Exploring APIs with Spring Boot HAL Explorer
+
+HAL(Json Hypertext Application Language)
+Es un formato que provee links entre los recursos del API
+
+"all-users" en "_links" en Hateoas usa el formato HAL
+
+HAL Explorer es un API que ayuda a explorar las API's
+
+Esto permite que las personas "non-technical" de mi equipo puedan
+tener la info de las api's de una manera amigable
+
+
+- Agregar dependency en el pom.xml
+- Ingresar a localhost:8080
+    Edit headers: /actuator      -> click en GO
+
+/api/v1/users/1      -> se muestra el link amigable porque reconoce el formato HAL
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
 
 
 
