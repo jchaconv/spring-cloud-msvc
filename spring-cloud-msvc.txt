@@ -47,11 +47,9 @@ REST (REpresentational state transfer) :
 - Para el service definition no hay un standard. WADL, SWAGGER son conocidos
 
 
-
-
 Evitar las versiones SNAPSHOT
 version: 3.0.0(M4) -> java17 o superior
-mejor usar 2.x.x
+mejor usar 2.x.x (2.7.16)
 groupid: com.rest.webservices
 artifactid: restful-web-services
 
@@ -337,47 +335,122 @@ tener la info de las api's de una manera amigable
 -------------------------------------------------------------------------------
 
 
+****************************************
+ * Inicio - JPA and HIBERNATE section *
+****************************************
 
+Config del proyecto 02-jpa-hibernate
 
+version: 2.7.16
+groupid: com.mcsv.restful
+artifactid: jpa-hibernate
 
+Dependencies:
 
-
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
+-Spring web
+-Spring Data JDBC
+-Spring Data JPA
+-H2 Database
 
 -------------------------------------------------------------------------------
 
+* Launching up H2 Console and Creating Course Table in H2
 
+- Agregar en properties:
+    spring.h2.console.enabled=true
 
+- Ir a localhost:8080/h2-console
+- Buscar en el log de la consola la url dinámica y ponerlo en JDBC Url:
+    jdbc:h2:mem:07315379-f12d-42ab-8418-3bbaf86abffb
 
+- Agregar en properties ara establecer como estática la url:
+    spring.datasource.url=jdbc:h2:mem:testdb
 
-
-
+- Para tener tablas en la db agregar en resources schema.sql
+    En la consola H2 ejecutar: SELECT * FROM COURSE;
 
 -------------------------------------------------------------------------------
 
+* SPRING JDBC *
+
+Se apoya en el uso de queries(puede crecer descomunalmente, ver JdbcRepository)
+y provee de métodos mediante JdbcTemplate para ejecutar dichos queries.
 
 
+INSERT INTO COURSE (id, name, author)
+VALUES(1, 'Lear AWS', 'in28minutes');
+
+SELECT * FROM COURSE;
+
+DELETE FROM COURSE WHERE id=1;
+
+JDBC: write a lot of queries and a lot of java code
+Spring JDBC: write a lot of queries but lesser java code
+
+(Atención con las anotaciones!)
+
+- Se crea un ejemplo con Spring JDBC -> JdbcRepository
+
+.update() para sentencias: INSERT, UPDATE or DELETE
+
+- Se crea JdbcCommandLineRunner para usar el método run y ejecutar
+el insert del Repository. (Se usó CommandLineRunner para ejecutar código
+"aislado" al levantar la aplicación).
+
+En la consola h2 ejecutar un select * from course y se ve el registro añadido desde la aplicación.
+
+- Se agregó el método insertDynamic y deleteDynamic en JdbcRepository para usar un query dinámico y pasarle los valores
+mediante un objeto java.
+
+- Para retornar data de la base de datos selectDynamic() en el repository
+queryForObject trae un ResultSet de la bd y lo transforma al bean mediante un rowMapper
+
+-------------------------------------------------------------------------------
+
+* JPA *
+Mapea el java bean to the table. Se usará EntityManager.
+Do not worry about queries, just map entities to tables!
+
+- Se modificó Course, usar los imports de jakarta
+- CourseJpaRepository:
+    - Se pudo usar @Autowired pero @PersistenceContext es más específica
+    - Usar @Transactional por las operaciones que se están realizando
+    - se usan los métodos apropiados de EntityManager y ya no nos preocupamos por los queries
+    - se usa merge() para agregar Course
+    - find() y el parámetro para la búsqueda
+    - remove() para el delete
+    - En CourseCommandLineRunner se comentó toda la impl de JDBC
+    - Agregar en properties: spring.jpa.show-sql=true para ver los queries ejecutados en la consola
+
+Es más sencillo que usar JDBC, entonces para qué Spring Data JPA?
+
+-------------------------------------------------------------------------------
+
+* SPRING DATA JPA *
+- Hace más sencillo el uso de JPA
+- Don't worry about EntityManager, spring will take care of everything
+- Se creó CourseSpringDataJpaRepository y extiende de JpaRepository y esta clase del package spring.data hace toda la "magia"
+- Se editó el CommandLineRunner
+- Se crea mucho menos código, solo se necesita crear la interfaz que extienda de JpaRepository
 
 
+-Se pueden usar varios métodos de spring data
+-Se puede crear un método personalizado pero debe mantener la convención de nombre
+para que spring data haga el query automáticamente. Ej: findByAuthor
 
 
+* HIBERNATE VS JPA *
+
+JPA: Es el API, como una interfaz
+jakarta.persistenca.Entity
+jakarta.persistenca.Id
+- Cómo se definen los entities, con @Entity
+- Cómo se mapean los atributos, con @Id, @Column
+
+Hibernate: Es la implementación más popular de JPA
+Para usar Hibernate directamente en el proyecto se pueden usar
+las anotaciones como esta:
+org.hibernate.annotations.Entity
 
 -------------------------------------------------------------------------------
 
