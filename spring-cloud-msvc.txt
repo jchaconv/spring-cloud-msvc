@@ -432,7 +432,7 @@ Es más sencillo que usar JDBC, entonces para qué Spring Data JPA?
 - Se creó CourseSpringDataJpaRepository y extiende de JpaRepository y esta clase del package spring.data hace toda la "magia"
 - Se editó el CommandLineRunner
 - Se crea mucho menos código, solo se necesita crear la interfaz que extienda de JpaRepository
-
+- La ventaja que da es que se puede cambiar de base de datos con cambios en el .properties
 
 -Se pueden usar varios métodos de spring data
 -Se puede crear un método personalizado pero debe mantener la convención de nombre
@@ -451,6 +451,128 @@ Hibernate: Es la implementación más popular de JPA
 Para usar Hibernate directamente en el proyecto se pueden usar
 las anotaciones como esta:
 org.hibernate.annotations.Entity
+(esto se dijo en el video pero veo que está deprecated)
+
+-------------------------------------------------------------------------------
+
+* Using JPA and HIBERNATE *
+
+Volviendo al proyecto 01-restful:
+
+- Añadir en properties:
+    spring.h2.console.enabled=true
+- Agregar las anotaciones de jakarta en User
+- Configure static h2 url en properties:
+    spring.datasource.url=jdbc:h2:mem:testdb
+
+- Ejecutar: SELECT * FROM USER_DETAILS;
+- Crear en /resources/data.sql
+- Añadir en properties:
+    spring.jpa.defer-datasource-initialization=true
+    (para retrasar la inicialización del datasource y se ejecute el script
+    en el archivo data.sql)
+
+
+- Crear UserRepository, UserJpaController. Se probaron los métodos en postman, funcionan bien.
+(Si me dejó crear user incluso con el nombre del campo cambiado a user_name)
+
+-------------------------------------------------------------------------------
+
+* Creating Post Entity with Many to One Relationship with User Entity *
+
+- Crear clase Post
+- @OneToMany en la clase User y el mappedBy para hacer match con la relación en la clase Post
+específicamente en el atributo user. Por eso el mappedBy es "user"
+- @ManyToOne en la clase Post y no agregamos mappedBy y @JsonIgnore.
+    fetch: EAGER(todo junto), LAZY(no quiero toda la info)
+- Agregamos @JsonIgnore en User para no mostrar en el response la lista de posts.
+- Agregar en properties:
+    (para mostrar los queries que se ejecutan)
+    spring.jpa.show-sql=true
+
+- Agregar inserts en post en data.sql
+
+Hasta aquí se pudo establecer la relación entre las tablas User y Post
+
+-------------------------------------------------------------------------------
+
+API's para información de Post entity
+
+- Se agregaron api's en UserJpaController
+- Se creó el PostRepository
+
+-------------------------------------------------------------------------------
+
+* Connecting to MYSQL database *
+
+1.- Ejecutar comandos:
+
+docker run -d --name mysql-container -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=social-media-database mysql:latest
+
+En cmd se puede entrar así:
+docker exec -it mysql-container /bin/bash
+bash-4.4# mysql -u root -p
+Enter password:
+    mysql>
+
+use social-media-database;
+select * from user_details;
+select * from post;
+
+
+2.- Agregar en properties:
+(comentar la url de h2)
+
+spring.datasource.url=jdbc:mysql://localhost:3306/social-media-database?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=password
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+
+
+3.- Editar pom.xml, comentar la dependency de H2 y agregar:
+
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <version>8.0.27</version>
+</dependency>
+
+Con estas configuraciones probé las api's y funcionaron bien
+
+-------------------------------------------------------------------------------
+
+* Implementing Basic Authentication with Spring Security *
+
+- Agregar dependency:
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+
+- Reiniciar app y cuando invoque en el navegador a cualquier api
+me saldrá el login simple.
+user: user
+password está en la consola
+
+-Agregar en properties para cambiar las credenciales:
+spring.security.user.name=jchaconv
+spring.security.user.password=miespositaloquita
+
+* Enhancing Spring Security Configuration for Basic Authentication *
+
+Spring Security usa
+    Filter Chains
+        - Todos los requests autenticados
+        - Si un request no está autenticado se muestra una página
+        - CSRF -> POST, PUT
+
+
+- Crear la clase SpringSecurityConfiguration
+Se mapean los 3 pasos que se usan en los filters de spring security
+para el basic authentication.
+
 
 -------------------------------------------------------------------------------
 
@@ -461,13 +583,6 @@ org.hibernate.annotations.Entity
 
 
 
--------------------------------------------------------------------------------
-
-
-
-
-
-
 
 
 -------------------------------------------------------------------------------
@@ -479,7 +594,65 @@ org.hibernate.annotations.Entity
 
 
 
+
+
 -------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
 
 
 
