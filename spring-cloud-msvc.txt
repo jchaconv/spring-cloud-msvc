@@ -599,10 +599,10 @@ ningún diseño es perfecto a la primera
     * Netflix API Gateway
 - Dynamic scale up and down
     * Naming Server (Eureka)
-    * Ribbon (Client Side Load Balancing)
+    * Ribbon (Client Side Load Balancing) -> Fue reemplazado por Spring Cloud Load Balancer
     * Feign (Easier Rest Clients)
 - Fault Tolerance
-    * Hystrix
+    * Hystrix -> Reemplazado por Resilience4j
 
 Benefits of microservices:
 * New technology and process adaption
@@ -615,29 +615,52 @@ https://github.com/in28minutes/spring-microservices/tree/master/03.microservices
 
 -------------------------------------------------------------------------------
 
+* MICROSERVICES WITH SPRING CLOUD *
 
+Important changes:
 
+- Spring Cloud Load Balancer instead of Ribbon
+- Spring Cloud Gateway instead of Zuul
+- Resilience4j instead of Hystrix
 
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
+Docker to containerize the microservices and Kubernetes to orchestrate all of the microservices.
 
 -------------------------------------------------------------------------------
 
+* Limits microservice *
 
+spring initializr
+(solo están las versiones 3.x.x y java 17, se tiene que cambiar manualmente en el pom)
+(tuve que actualizar la versión de spring cloud para que sea compatible con spring boot 2.x.x)
+
+version: 2.7.16
+groupid: com.neoris.mcsvc
+artifactid: limits-service
+
+dependencies:
+-springweb
+-devtools
+-actuator
+-config client
+
+
+- Agregar en properties:
+(Esta config es necesaria por tener el import de Config Client)
+spring.config.import=configserver:http://localhost:8888
+
+
+- Crear LimitsController y agregar en properties para tomar los valores de aquí:
+limits-service.minumum=2
+limits-service.maximum=998
+
+-------------------------------------------------------------------------------
+
+*  Setting up Spring Cloud Config Server *
+
+spring initializr
+version: 2.7.16
+groupid: com.neoris.mcsvc
+artifactid: spring-cloud-config-server
 
 
 
