@@ -872,8 +872,69 @@ Todas las pruebas salieron bien hasta aquí
 
 -------------------------------------------------------------------------------
 
-*
+* Understand Naming Server and Setting up Eureka Naming Server *
 
+Como en CurrencyExchangeProxy se tiene hardcodeado localhost:8000 y surge la necesidad de tener varias instancias del microservicio
+es necesario crear un NamingServer que actúe como un loadBalancer para todas las instancias del mcsvc
+
+(Cambiar manualmente las versiones)
+spring initializr
+version: 2.7.16
+groupid: com.neoris.mcsvc
+artifactid: naming-server
+
+spring-cloud.version: 2021.0.8
+
+dependencies:
+-eureka server
+-devtools
+-actuator
+
+- Agregar @EnableEurekaServer en la clase principal
+
+- Agregar en properties:
+
+spring.application.name=naming-server
+server.port=8761
+
+#Eureka recommendations:
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+
+#For debugging
+#eureka.instance.prefer-ip-address=true
+#eureka.instance.hostname=localhost
+
+- Ingresar a http://localhost:8761/ y se carga el home de nuestro server
+
+- Agregar la dependency de eureka-client en los mcsvc currency-exchange y currency-conversion para registrarlos en el server:
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+- Agregar en properties de ambos mcsvc:
+
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka
+
+Hasta aquí hemos registrado nuestros dos mcsvc en eureka-server
+
+-------------------------------------------------------------------------------
+
+* Load Balancing with Eureka, Feign & Spring Cloud LoadBalancer *
+
+- Quitar el port de CurrencyExchangeProxy para que al conectarse con el naming-server se haga el load-balancing
+con las instancias activas de currency-exchange
+
+- NO pude levantar otra instancia del servicio currency-exchange en un port distinto.
+Sin embargo, el load-balancing es automático y viene gracias a eureka-server.
+Se puede probar haciendo requests y se ve que ambas insntacias responden. También se puede probar
+dando de baja a una instancia y levantando otra.
+
+
+
+-------------------------------------------------------------------------------
 
 
 
@@ -882,3 +943,26 @@ Todas las pruebas salieron bien hasta aquí
 
 
 -------------------------------------------------------------------------------
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
