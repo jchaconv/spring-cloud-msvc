@@ -631,7 +631,7 @@ Docker to containerize the microservices and Kubernetes to orchestrate all of th
 
 spring initializr
 (solo están las versiones 3.x.x y java 17, se tiene que cambiar manualmente en el pom)
-(tuve que actualizar la versión de spring cloud para que sea compatible con spring boot 2.x.x)
+(tuve que actualizar la versión de spring cloud a 2021.0.8 para que sea compatible con spring boot 2.x.x)
 
 version: 2.7.16
 groupid: com.neoris.mcsvc
@@ -657,76 +657,151 @@ limits-service.maximum=998
 
 *  Setting up Spring Cloud Config Server *
 
+(Cambiar manualmente las versiones)
 spring initializr
 version: 2.7.16
 groupid: com.neoris.mcsvc
 artifactid: spring-cloud-config-server
 
+spring-cloud.version: 2021.0.8
 
+dependencies:
+-devtools
+-config server
 
+- Agregar en properties:
+spring.application.name=spring-cloud-config-server
+server.port=8888
 
+Agregar en el archivo limits-service.properties:
+limits-service.minumum=4
+limits-service.maximum=996
 
+- En 04-spring-cloud-config-server en el archivo properties:
+spring.cloud.config.server.git.uri=file:///D:/cursos-udemy/spring-cloud-msvc/git-localconfig-repo
 
+Y la anotación @EnableConfigServer en la clase principal(SpringCloudConfigServerApplication.java)
 
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
+- Ingresar a localhost:8888/limits-service/default
+Retorna un json. Con esto ya tenemos centralizada la configuracion
 
 -------------------------------------------------------------------------------
 
+* Connect Limits Service to Spring Cloud Config Server *
 
+En 03-limits-service agregar:
+spring.application.name=limits-service
 
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
+Ya tenía la otra llave que referencia al config-server
+con este cambio al invocar al api llama a los valores del properties local
+del server
 
 -------------------------------------------------------------------------------
 
+* Configuring Profiles for limits-service *
 
+en el repo local se agregan archivos con -dev -qa
+Ir a localhost:8888/limits-service/dev ir retornará la config de dev y default
 
+Si quiero dejar uno activo agregar en properties:
+spring.profiles.active=dev
+spring.cloud.config.profile=dev
 
+Debería salir esto:
+c.n.m.l.LimitsServiceApplication         : The following 1 profile is active: "dev"
 
-
-
-
-
+Se pueden crear muchos properties, incluso de diferentes microservicios y esa es la ventaja
+de tener todo centralizado.
 
 -------------------------------------------------------------------------------
 
+*  Setting up currency-exchange-service *
+(Cambiar manualmente las versiones)
+spring initializr
+version: 2.7.16
+groupid: com.neoris.mcsvc
+artifactid: currency-exchange-service
 
+spring-cloud.version: 2021.0.8
+
+dependencies:
+-web
+-config client
+-actuator
+
+- Agregar en properties:
+spring.config.import=optional:configserver:http://localhost:8888
+spring.application.name=currency-exchange
+server.port=8000
+
+
+Currency Exchange Service:
+http://localhost:8000/currency-exchange/from/USD/to/PER
+
+Response structure:
+{
+   "id":10001,
+   "from":"USD",
+   "to":"INR",
+   "conversionMultiple":65.00,
+   "environment":"8000 instance-id"
+}
+
+
+Currency Conversion Service:
+http://localhost:8100/currency-conversion/from/USD/to/PER/quantity/10
+
+-------------------------------------------------------------------------------
+
+* Setting up Dynamic Port in the Response *
+
+Se agrega la clase Environment en CurrencyExchangeController getExchangeValue() para obtener el port y retornarlo en el response.
+
+Hay una opción en eclipse para tener dos instancias de la aplicación en puertos diferentes. Cuando hizo esa prueba se ve que el puerto
+en el response también cambia. Con esto se tiene identificado cuál instancia se está usando.
+
+-------------------------------------------------------------------------------
+
+* Configure JPA and Initialized Data *
+
+- Se agregaron las dependencias:
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>com.h2database</groupId>
+	<artifactId>h2</artifactId>
+	<scope>runtime</scope>
+</dependency>
+
+- Agregar en properties:
+
+spring.h2.console.enabled=true
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.jpa.show-sql=true
+
+- Mapear como Entity la clase CurrencyExchange
+Se cambió el nombre de los campos para las tablas con @Column para evitar conflictos con SQL
+Hasta aquí ya fue creada la tabla y se puede ver en:
+http://localhost:8000/h2-console
+
+- Crear resources/data.sql para insertar datos en la tabla.
+
+- Debido a que en estas versiones de spring boot la data se inserta antes que se creen las tablas
+se necesita agregar en properties:
+spring.jpa.defer-datasource-initialization=true
+
+Con este cambio ya se ve la tabla con los datos correspondientes.
+
+- Se crea CurrencyExchangeRepository y un método custom. Luego se agrega al controller.
+Hasta aquí se muestra la info de la bd correctamente en el api.
+
+-------------------------------------------------------------------------------
+
+*  *
 
 
 
