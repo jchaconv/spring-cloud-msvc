@@ -932,13 +932,65 @@ Sin embargo, el load-balancing es automático y viene gracias a eureka-server.
 Se puede probar haciendo requests y se ve que ambas insntacias responden. También se puede probar
 dando de baja a una instancia y levantando otra.
 
-
-
 -------------------------------------------------------------------------------
 
+* Setting up Spring Cloud API Gateway *
+
+Para implementar todas las features comunes entre microservicios (logging, authorization, authentication, etc)
+
+Actualmente: Spring Cloud API Gateway
+Antes: Zuul
+
+
+(Cambiar manualmente las versiones)
+spring initializr
+version: 3.2.1
+groupid: com.neoris.mcsvc
+artifactid: api-gateway
+
+java.version: 17  -> Tuve que usar este jdk por conflictos con la dependencia del Gateway
+spring-cloud.version: 2023.0.0
+
+
+Dependencies:
+- devtools (opcional, gasta mucha memoria)
+- actuator
+- Eureka discovery client
+- Gateway (Spring Cloud Routing)
+
+
+- Agregar en properties:
+spring.application.name=api-gateway
+server.port=8765
+
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka   (se agrega para que al entrar a localhost:8761 aparezca
+el API GATEWAY registrado en el server de EUREKA)
 
 
 
+
+Url's en el proyecto:
+
+Initial
+
+- http://localhost:8765/CURRENCY-EXCHANGE/currency-exchange/from/USD/to/INR
+- http://localhost:8765/CURRENCY-CONVERSION/currency-conversion/from/USD/to/INR/quantity/10
+- http://localhost:8765/CURRENCY-CONVERSION/currency-conversion-feign/from/USD/to/INR/quantity/10
+
+
+Lower Case
+
+- http://localhost:8765/currency-exchange/currency-exchange/from/USD/to/INR
+- http://localhost:8765/currency-conversion/currency-conversion/from/USD/to/INR/quantity/10
+- http://localhost:8765/currency-conversion/currency-conversion-feign/from/USD/to/INR/quantity/10
+
+
+Custom Routes
+
+- http://localhost:8765/currency-exchange/from/USD/to/INR
+- http://localhost:8765/currency-conversion/from/USD/to/INR/quantity/10
+- http://localhost:8765/currency-conversion-feign/from/USD/to/INR/quantity/10
+- http://localhost:8765/currency-conversion-new/from/USD/to/INR/quantity/10
 
 
 
