@@ -936,6 +936,8 @@ dando de baja a una instancia y levantando otra.
 
 * Setting up Spring Cloud API Gateway *
 
+How we can proxy through the API Gateway to other microservices using Eureka
+
 Para implementar todas las features comunes entre microservicios (logging, authorization, authentication, etc)
 
 Actualmente: Spring Cloud API Gateway
@@ -957,14 +959,56 @@ Dependencies:
 - actuator
 - Eureka discovery client
 - Gateway (Spring Cloud Routing)
-
+- eureka client
 
 - Agregar en properties:
+
 spring.application.name=api-gateway
 server.port=8765
 
-eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka   (se agrega para que al entrar a localhost:8761 aparezca
-el API GATEWAY registrado en el server de EUREKA)
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka (se agrega para que al entrar a localhost:8761 
+aparezca el API GATEWAY registrado en el server de EUREKA)
+
+spring.cloud.gateway.discovery.locator.enabled=true
+spring.config.import=optional:configserver:http://localhost:8888
+spring.cloud.gateway.discovery.locator.lowerCaseServiceId=true
+
+
+Y luego invocar:
+
+http://localhost:8765/currency-exchange/currency-exchange/from/EUR/to/PER
+http://localhost:8765/currency-conversion/currency-conversion/from/USD/to/PER/quantity/10
+
+
+Los responses son correctos 
+
+-------------------------------------------------------------------------------
+
+* Exploring Routes with Spring Cloud Gateway *
+
+- Crear ApiGatewayConfiguration.java
+
+Con la config inicial se puede invocar a http://localhost:8765/get y responde correctamente
+Ver los comentarios en el desarrollo para ver las funcionalidades.
+
+Con los routes configurados se puede invocar a los mcsvc con las uris:
+
+http://localhost:8765/currency-exchange/from/EUR/to/PER
+http://localhost:8765/currency-conversion/from/USD/to/PER/quantity/10
+http://localhost:8765/currency-conversion-feign/from/USD/to/PER/quantity/10
+
+http://localhost:8765/currency-conversion-new/from/USD/to/PER/quantity/10
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
 
 
 
@@ -993,9 +1037,7 @@ Custom Routes
 - http://localhost:8765/currency-conversion-new/from/USD/to/INR/quantity/10
 
 
-
--------------------------------------------------------------------------------
-
+Para invocar al servicio currency-exchange desde API-GATEWAY se tiene que agregar en properties:
 
 
 
