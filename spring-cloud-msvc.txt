@@ -936,6 +936,19 @@ dando de baja a una instancia y levantando otra.
 
 * Setting up Spring Cloud API Gateway *
 
+- Efectivo para ruteo de API's
+- Provee security y monitoring/metrics
+- Trabaja con Spring webflux
+
++ Features:
+
+- se puede hacer match de las rutas con cualquier atributo del request(header, param, etc)
+- se pueden definir predicates y filters
+- integración con spring cloud discovery client (load balancing)
+- path rewriting
+
+
+
 How we can proxy through the API Gateway to other microservices using Eureka
 
 Para implementar todas las features comunes entre microservicios (logging, authorization, authentication, etc)
@@ -1000,7 +1013,72 @@ http://localhost:8765/currency-conversion-feign/from/USD/to/PER/quantity/10
 http://localhost:8765/currency-conversion-new/from/USD/to/PER/quantity/10
 
 
+-------------------------------------------------------------------------------
 
+
+* Implementing Spring Cloud Gateway Logging Filter *
+
+(para ver los logs de los requests realizados)
+Se crea la clase LoggingFilter. Al hacer request al api-gateway se ve en los logs de la consola algo como esto:
+
+[ctor-http-nio-3] c.n.m.apigateway.filter.LoggingFilter    : Path of the request received -> /currency-conversion-feign/from/USD/to/PER/quantity/10
+[ctor-http-nio-3] c.n.m.apigateway.filter.LoggingFilter    : Path of the request received -> /currency-exchange/from/EUR/to/PER
+[ctor-http-nio-3] c.n.m.apigateway.filter.LoggingFilter    : Path of the request received -> /currency-conversion-feign/from/USD/to/PER/quantity/10
+
+
+
+-------------------------------------------------------------------------------
+
+* Getting started with Circuit Breaker - Resilience4j *
+(tener en cuenta que el ejemplo compila bien pero no funciona porque no es compatible con spring boot 3
+hay conflicto de versiones y no pude resolverlo todavía)
+
+- Se crea CircuitBreakerController para probar un api que falle
+
+@Retry(name = "sample-api") -> hace 3 request en caso de error(según el vídeo, yo intenté y solo ejecutó 1 vez)
+se agregó método callback en el api
+para configurar el número de reintentos agregar en properties:
+(debe tener en la llave el nombre que puse en @Retry)
+
+resilience4j.retry.instances.sample-api.maxAttempts=5
+
+-------------------------------------------------------------------------------
+
+* Circuit Breaker Features of Resilience4j *
+
+Se comenta la línea del @Retry y se agrega:
+
+@CircuitBreaker(name = "default", fallbackMethod = "hardcodedResponse")
+
+Sirve para que en caso falle el mcsvc se llame al método fallback y no al método real una y otra vez.
+La mejor feature es que no hace requests innecesarios porque revisa al interno si el servicio está operativo,
+si no lo está hace pocas peticiones.
+
+
+* Exploring Rate Limiting and BulkHead Features of Resilience4j *
+
+Comentar la anotación @CircuitBreaker y agregar:
+
+@RateLimiter(name = "default")
+
+Agregar en properties:
+
+#2 requests es el límite establecido
+resilience4j.ratelimiter.instances.default.limitForPeriod=2
+
+#10s es el tiempo en el que se permite la cantidad de requests
+resilience4j.ratelimiter.instances.default.limitRefreshPeriod=10s
+
+También se puede usar @Bulkhead para establecer el número máximo de peticiones
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+-------------------------------------------------------------------------------
 
 
 
@@ -1013,31 +1091,10 @@ http://localhost:8765/currency-conversion-new/from/USD/to/PER/quantity/10
 
 
 
-Url's en el proyecto:
-
-Initial
-
-- http://localhost:8765/CURRENCY-EXCHANGE/currency-exchange/from/USD/to/INR
-- http://localhost:8765/CURRENCY-CONVERSION/currency-conversion/from/USD/to/INR/quantity/10
-- http://localhost:8765/CURRENCY-CONVERSION/currency-conversion-feign/from/USD/to/INR/quantity/10
 
 
-Lower Case
 
-- http://localhost:8765/currency-exchange/currency-exchange/from/USD/to/INR
-- http://localhost:8765/currency-conversion/currency-conversion/from/USD/to/INR/quantity/10
-- http://localhost:8765/currency-conversion/currency-conversion-feign/from/USD/to/INR/quantity/10
-
-
-Custom Routes
-
-- http://localhost:8765/currency-exchange/from/USD/to/INR
-- http://localhost:8765/currency-conversion/from/USD/to/INR/quantity/10
-- http://localhost:8765/currency-conversion-feign/from/USD/to/INR/quantity/10
-- http://localhost:8765/currency-conversion-new/from/USD/to/INR/quantity/10
-
-
-Para invocar al servicio currency-exchange desde API-GATEWAY se tiene que agregar en properties:
+-------------------------------------------------------------------------------
 
 
 
