@@ -715,6 +715,7 @@ de tener todo centralizado.
 
 *  Setting up currency-exchange-service *
 (Cambiar manualmente las versiones)
+(Tener en cuenta que para usar registrar en Zipkin se actualizaron las versiones)
 spring initializr
 version: 2.7.16
 groupid: com.neoris.mcsvc
@@ -1073,47 +1074,708 @@ También se puede usar @Bulkhead para establecer el número máximo de peticione
 
 -------------------------------------------------------------------------------
 
+* Distributed Tracing *
+
+Para tener mejor visibilidad de los errores generados en la cadena de comunicación entre mcsvc
+
+Todos los mcsvc envían la información a un "Distributed Tracing Server" y este guarda la info en una database
+
+Aquí es donde entra Zipkin como un Tracing Server. Vamos a conectar nuestros mcsvc con Zipkin al levantarlo en un docker container.
+
+* Launching Zipkin Container using Docker *
+
+docker run -p 9411:9411 openzipkin/zipkin:2.23
+
+Entrar a localhost:9411 y carga el home del servidor. Falta conectar los mcsvc para ver la traza
+
+-------------------------------------------------------------------------------
+
+* Getting Started with Observability and OpenTelemetry *
+
+OpenTelemetry: Entiendo que es como un stack y standard de tecnologías que ayudan con Observability(tracing, logging, metrics)
+ayuda porque ya no nos preocupamos por escoger una tecnología diferente para cada aspecto de metrics, logs, etc
+
+-------------------------------------------------------------------------------
 
 
+* Connecting Currency Exchange Microservice with Zipkin *
+
+Micrometer asigna id's a cada request en los mcsvc, por eso es vital para la trazabilidad.
+
+
+Se actualizaron las versiones:
+
+spring boot: 3.0.6
+java: 17
+spring cloud: 2022.0.0
+
+- Agregar dependencias:
+
+<dependency>
+	<groupId>io.micrometer</groupId>
+	<artifactId>micrometer-observation</artifactId>
+</dependency>
+
+<dependency>
+	<groupId>io.micrometer</groupId>
+	<artifactId>micrometer-tracing-bridge-otel</artifactId>
+</dependency>
+
+<dependency>
+	<groupId>io.opentelemetry</groupId>
+	<artifactId>opentelemetry-exporter-zipkin</artifactId>
+</dependency>
+
+- Agregar en properties:
+
+management.tracing.sampling.probability=1.0
+logging.pattern.level=%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]
+
+- Agregar Logger en CurrencyExchangeController
+
+Ejecutar el naming-server y luego exchange-service
+Llamar al servicio y ver logs en Zipkin, todo correcto!
+
+
+-------------------------------------------------------------------------------
+
+* Connecting Currency Conversion Microservice & API Gateway with Zipkin *
+
+Se hizo lo mismo que en el mcsvc anterior pero debido al uso de FEIGN en currency-conversion se agregó la dependencia:
+
+<dependency>
+	<groupId>io.github.openfeign</groupId>
+	<artifactId>feign-micrometer</artifactId>
+</dependency>
+
+Además se cambió el uso de RestTemplate en el CurrencyConversionController para que pueda ser registrado por micrometer.
+Básicamente se agregó una clase embebida @Configuration y luego se inyectó en la principal para no hacer new RestTemplate()
+
+
+Las pruebas salieron bien y se ven los logs de Zipkin
 
 
 
 -------------------------------------------------------------------------------
 
+* Creating Container Image for Currency Exchange Microservice *
+
+1.- Usar el plugin de maven para buildear la imagen. Agregar en pom.xml:
+
+<plugin>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-maven-plugin</artifactId>
+	<configuration>
+		<image>
+			<name>jchaconv/${project.artifactId}:${project.version}</name>
+		</image>
+		<pullPolicy>IF_NOT_PRESENT</pullPolicy>
+	</configuration>
+</plugin>
 
 
+2.- Luego ejecutar:
+spring-boot:build-image -DskipTests
 
+O manualmente en IntelljIDEA en las opciones de Maven
+Plugins -> spring-boot -> spring-boot:build-image
+
+Y aparece este log al final de la ejecución:
+[INFO] Successfully built image 'docker.io/jchaconv/currency-exchange-service:0.0.1-SNAPSHOT'
+
+
+3.- Para levantar el container:
+docker run -p 8000:8000 -d jchaconv/currency-exchange-service:0.0.1-SNAPSHOT
+
+Se obtiene el response correctamente pero se ven errores en el container porque no está levantado el naming-server
+
+¡Detener el container para iniciarlo con docker-compose!
+
+-------------------------------------------------------------------------------
+
+
+* Getting Started with Docker Compose - Currency Exchange Microservice *
+
+1.- Crear docker-compose.yaml
+
+(Usar espacios para el formato y no TABS)
+
+2.- En la ruta del archivo ejecutar el comando:
+
+docker-compose up -d                           -> modo detach
+docker-compose logs                            -> para ver logs
+docker-compose logs [nombre_del_servicio]      -> logs de un servicio especifico
+docker-compose down                            -> termina los containers creados 
+
+3.- Ejecutar request del servicio.
+Responde correctamente hasta aquí.
 
 
 
 -------------------------------------------------------------------------------
 
+* Running Eureka Naming Server with Docker Compose *
+
+1.- Generar la image, para eso hacer lo mismo que con currency-exchange.
+Agregar la config en pom.xml y ejecutar los comandos.
+
+Se creó correctamente:
+jchaconv/naming-server:0.0.1-SNAPSHOT
+
+2.- Modificar el docker-compose.yml
+
+(a la altura de depends_on)
+environment:
+  EUREKA.CLIENT.SERVICEURL.DEFAULTZONE: http://naming-server:8761/eureka
+
+O cambiar la property de currency-exchange:
+eureka.client.serviceUrl.defaultZone=http://naming-server:8761/eureka
+
+(no hace falta borrar la imagen existente, es reemplazada automáticamente)
 
 
+3.- Ejecutar el comando:
+docker-compose up -d
+docker-compose logs naming-server
 
+Las pruebas fueron correctas y figura la instancia de currency-exchange en EUREKA
 
+-------------------------------------------------------------------------------
+
+* Running Currency Conversion Microservice with Docker Compose *
+
+1.- Ejecutar los mismos pasos que en los mcsvc anteriores: Agregar dependencies en pom.xml,
+modificar la property de eureka y generar la imagen.
+
+2.- Se quita el localhost por currency-exchange en CurrencyConversionController
+
+3.- Modificar docker-compose file y ejecutar el comando:
+docker-compose up -d
+
+Hasta aquí las pruebas correctas y los dos mcsvc figuran en EUREKA
+
+(Hacer lo mismo para api-gateway: No se pudo por conflictos de versiones)
+
+-------------------------------------------------------------------------------
+
+* Running Zipkin with Docker Compose *
+
+1.- Agregar cambios en docker-compose. También se agregó variable de environment para los dos mcsvc
+
+ zipkin-server:
+    image: openzipkin/zipkin:2.23
+    mem_limit: 300m
+    ports:
+      - "9411:9411"
+    networks:
+      - currency-network
+    restart: always #Restart if there is a problem starting up
+
+(Si levantó el server de zipkin pero no logueó nada)
 
 
 -------------------------------------------------------------------------------
 
+* Docker, Kubernetes and Microservices - Made for each other *
+
+Se habla de "Container Orchestration" cuando se presentan estas necesidades:
+
+- más instancias de un container
+- load balancer para distribuir la carga entre instancias de mcsvc
+- autoscaling basado en la demanda
+- service discovery para que los mcsvc se identifiquen unos con otros
+- self healing para que las instancias que fallan sean reemplazadas automáticamente
+- zero downtime deployment para pasar de una versión v1 a v2 sin tiempos de caída de la aplicación
+
+Tecnologías que proveen "Container Orchestration":
+
+AWS: ECS y Fargate
+
+Cloud neutral: KUBERNETES
+    Se puede usar en mi propio datacenter o en la nube:
+    AWS   -> EKS
+    Azure -> AKS 
+    GCP   -> GKE (ofrece free tier)
+
+
+Kubernetes administra los servers virtuales.
+AWS los llama EC2(Elastic Compute Cloud), Azure -> virtual machines y GCP -> Compute engines
+y Kubernetes usa el término NODES. 
+Como se pueden administrar miles de nodes se necesita un manager para cierta cantidad de nodes.
+Es por eso que:
+
+CLUSTER contiene MASTER NODES Y WORKER NODES
+
+(BORRAR TODO LO QUE SE CREA PARA EVITAR COBROS)
+
+1.- Crear cuenta en GCP
+https://cloud.google.com/
+
+Figura un proyecto inicial creado por default.
+
+---
+
+2.- Ir a la consola y buscar Kubernetes Engine
+Esperar a que todo se active
+
+Create cluster -> name: in28minutes-cluster -> create (dejar todo lo demás por defecto)
+
+Entrar al cluster creado y up & running, ver features y nodes
+
+---
+
+3.- Para hacer deploy de un mcsvc se necesita conectara con el cluster usando la shell de GCP
+
+En la parte superior derecha buscar el botón de la consola "Activate Cloud Shell"
+Se abre en el mismo navegador y se puede editar las preferencias. Dar en "Open in new window"
+
+En el cluster hay un botón(icon) que dice CONNECT. Copiar el comando y ejecutarlo.
+
+Ejecutar los siguientes comandos:
+
+kubectl version
+
+Para crear un deployment(se pone el nombre del deployment y se trae la imagen de dockerhub):
+kubectl create deployment hello-world-rest-api --image=in28minutes/hello-world-rest-api:0.0.1.RELEASE
+
+Para exponer al mundo:
+kubectl expose deployment hello-world-rest-api --type=LoadBalancer --port=8080
+
+En GCP ir a Services & Ingress -> Kubernetes Services -> Click en endpoints
+
+Es algo como esto en el navegador:
+
+35.223.169.37:8080/hello-world
+35.223.169.37:8080/hello-world-bean
+
+(Carga correctamente)
+
+---
+
+Para ver eventos:
+kubectl get events
+
+
+Por detrás pasa lo siguiente para que todo funcione:
+
+Cuando Kubernetes crea un deployment se crea un replica-set, pod
+y cuando se expone el deployment se crea un service
+
+kubectl get pods
+kubectl get replicasets
+kubectl get deployment
+kubectl get service
+
+pod
+replica-set
+service
+
+
+*****
+POD:
+*****
+
+pod: es la unidad deployable más pequeña
+tienen ip única. pueden contener múltiples containers
+
+kubectl get pods -o wide
+kubectl explain pods   -> aparece información de los conceptos
+
+copiar el id del pod:
+
+kubectl describe pod id-pod    -> se muestra info relevante del pod
+
+
+NODE : {
+    POD1: {
+        CONTAINER1,
+        CONTAINER2
+    },
+    POD2: {
+        CONTAINER3,
+        CONTAINER4
+    }
+}
+
+
+*************
+REPLICA-SET
+*************
+
+asegura que un número determinado de pods tengan un estado running
+
+kubectl get replicasets
+kubectl get rs
+
+kubectl get pods -o wide    -> tomar el id-pod
+kubectl delete pods id-pod
+kubectl get pods -o wide -> se ve que se creó un nuevo pod automáticamente
+
+esto hace que no haya tiempos de caída de la aplicación
+
+Para incrementar el número:
+kubectl scale deployment hello-world-rest-api --replicas=3
+kubectl get pods    -> se ve que ahora hay 3 pods
+
+cargar la url: ip-gcp:8080/hello-world varias veces y se ve que cambia el id
+
+kubectl get replicaset    -> aparece el desired 3
+
+para ver los eventos en orden de ejecución:
+
+kubectl get events --sort-by=.metadata.creationTimestamp
+
+kubectl explain replicaset   -> info del comando
+
+********************
+    DEPLOYMENT
+********************
+
+kubectl get rs -o wide    -> info relacionada con el replicaset
+
+kubectl set image deployment hello-world-rest-api hello-world-rest-api=DUMMY_IMAGE:TEST   -> el segundo hello-world es el nombre del container y el nombre de la imagen DUMMY es incorrecto
+
+esta actualización debería hacer que la aplicación se caiga. sin embargo, sigue funcionando correctamente.
+
+kubectl get rs -o wide   -> ahora hay dos replicaset y se ve que el nuevo con la DUMMY_IMAGE tiene estado READY = 0 porque obviamente esta imagen no existe y tiene error
+
+kubectl get pods  -> aquí se ve claramente ese status InvalidImageName en el cuarto pod. copiar el id-pod con error
+
+kubectl describe pod id-pod   -> aquí se ve el log con la descripción explícita
+
+kubectl get events --sort-by=.metadata.creationTimestamp -> aquí también se ve un poco de detalle
 
 
 
+DEPLOYMENT : {
+    REPLICA-SET-1: {    (app v1)
+        POD1: {
+            CONTAINER1,
+            CONTAINER2
+        },
+        POD2: {
+            CONTAINER3,
+            CONTAINER4
+        }
+    },
+    REPLICA-SET-2: {    (app v2) -> lo que intenta es levantar una instancia de la nueva versión pero ocurrió error según nuestro ejemplo
+        POD1: {
+            CONTAINER1,
+            CONTAINER2
+        },
+        POD2: {
+            CONTAINER3,
+            CONTAINER4
+        }
+    }
+    
+}
+
+Ahora establezco con una imagen real:
+
+kubectl set image deployment hello-world-rest-api hello-world-rest-api=in28min/hello-world-rest-api:0.0.2.RELEASE
+
+kubectl get pods   -> 3 pods en TERMINATING y 3 pods en RUNNING
+
+kubectl get rs   -> Hay 3 y solo 1 que tiene READY = 3  
+
+Si se carga el api en el navegador se ve el cambio a V2
+
+en los eventos se ve el detalle del autoscaling para 0 downtime
 
 
--------------------------------------------------------------------------------
+********************
+    SERVICES
+********************
+
+Los SERVICES hacen que no tenga que llamar a cada ip de pod sino a una sola url
+provee una sola external interface. permanent address
+
+es creado en el momento de darle expose deployment
+
+Ir a Services & Ingress -> entrar al service -> ver la info mencionada
+
+Buscar Load Balancing en GCP -> entrar al load balancer y ver la info, aparecen las instances
 
 
+kubectl get pods -o wide    -> todos tienen una ip
+kubectl delete pod pod-id
+kubectl get pods -o wide    -> al hacer otra vez la consulta se ha creado un pod nuevo automatically
+kubectl delete pod pod-id
+kubectl get pods -o wide    -> las ip's también cambian
+
+kubectl get services  -> se ve que está creado el loadbalancer
+
+Para acceder al Cluster-ip se puede acceder desde adentro porque no tiene External-ip
+
+ 
+*GCP*
+Desde Workloads se puede editar manualmente el deployment
+también se puede editar el yaml
 
 
+*******************************
+    KUBERNETES ARCHITECTURE
+********************************
+
+Master Node: {
+    API Server: "kube-apiserver",
+    Distribute Database: "etcd",
+    Scheduler: "kube-scheduler",
+    Controller Manager: "kube-controller-manager"
+}
 
 
-
--------------------------------------------------------------------------------
-
-
+Installing GCLOUD -> es una consola de comandos
+googlear e instalar
 
 
+gcloud auth login
+gcloud set project PROJECT_ID
 
 
+Install kubectl:
+entrar a la página de kubernetes y seguir los pasos
+
+entrar a clusters en GCP:
+copiar el comando en la opción CONNECT e ingresar el comando en la consola gcloud
+
+---
+
+Setup Currency Exchange & Conversion Microservices - Kubernetes
+
+- Hacer cambios en el pom.xml:
+    - cambiar version del project
+    - cambiar name, al final poner "-kubernetes"
+    - comentar spring-cloud-starter-config y eureka-client
+    - comentar sleuth-zipkin y spring-rabbit
+
+- En CurrencyConversionController agregar:
+logger.info("...")  -> revisar en github
+
+- En CurrencyExchangeController agregar host y version para retornarlo en el environment
+
+- Agregar en properties:
+management.endpoint.health.probes.enabled=true
+management.health.livenessState.enabled=true
+management.health.readinessState.enabled=true
+
+- En CurrencyExchangeProxy cambiar el @FeignClient
+
+---
+
+* Container images for Exchange & Currency Conversion Microservices *
+
+Generar las imagenes con el build de maven
+
+En la consola:
+docker login
+docker push [image-name]
+
+Validar que las imagenes figuren en mi cuenta de dockerhub
+
+---
+
+* Deploy Microservices to Kubernetes & Understand Service Discovery *
+
+en consola:
+kubectl version
+kubectl create deployment currency-exchange --image=[image-name]
+kubectl expose deployment currency-exchange --type=LoadBalancer --port:8000
+kubectl get svc   -> se ve el LB
+kubectl get pods o get po            -> abreviaturas
+kubectl get replicaset o get rs
+kubectl get all
+
+copiar el external-ip del loadBalancer
+
+en GCP -> cloudshell:
+
+curl http://34.66.241.150:8000/currency-exchange/from/USD/to/PER  → poner la ip correcta y validar response
+
+
+exponiendo currency-conversion:
+
+kubectl create deployment currency-conversion --image=[image-name]
+kubectl expose deployment currency-conversion --type=LoadBalancer --port:8100
+
+kubectl get svc
+kubectl get svc --watch
+
+curl http://34.67.33.185:8100/currency-conversion-feign/from/USD/to/PER/quantity/10     → response correcto en GCP
+
+(ver environment del response, lo que sale es el id del pod)
+
+
+---
+
+* Creating Declarative Configuration Kubernetes YAML for Microservices *
+
+En una consola en la carpeta del mcsvc:
+
+kubectl get deployment currency-exchange -o yaml >> deployment.yaml     → se crea automáticamente el archivo
+kubectl get service currency-exchange -o yaml >> service.yaml
+kubectl diff -f deployment.yaml     → para ver diferencias
+kubectl apply -f deployment.yaml
+
+kubectl get pods        → validar pods creados
+
+en gcp ejecutar comando:
+watch http://34.66.241.150:8000/currency-exchange/from/USD/to/PER       → es para ejecutar curls constantemente y ver el balanceo
+
+
+----
+
+* Clean up Kubernetes YAML for Microservices *
+
+hacer un backup del deployment.yaml
+editar un nuevo archivo → ver cambios en github o video
+
+no hizo pruebas solo explicó los cambios
+
+
+----
+
+
+* Enable Logging and Tracing APIs in Google Cloud Platform *
+
+En GCP buscar: Apis and Services
+
+Click en "Enable APIS and SERVICES"
+buscar: logging → click en "Cloud Logging API"
+"Manage"
+
+buscar: Stackdriver API
+
+parece que solo los muestra activos en su cuenta
+
+
+----
+
+* Deploying Microservices using Kubernetes YAML Configuration *
+
+kubectl delete all -l app=currency-exchange     → con esto elimino pods, service, deployment y rs
+kubectl delete all -l app=currency-conversion
+kubectl get all     → debe estar vacío
+
+
+kubectl apply -f deployment.yaml
+kubectl get pods
+kubectl get svc --watch
+
+tomar la ext ip y hacer un watch en la consola de GCP
+
+lo interesante es que si hago un cambio en el deployment.yaml (por ejemplo para aumentar rs) solo tengo que guardar el cambio y ejecutar el comando nuevamente:
+
+kubectl apply -f deployment.yaml            → no hace falta borrar nada
+
+----
+
+*  Playing with Kubernetes Declarative YAML Configuration *
+
+hacer backup del deployment.yaml
+
+hacer un deployment.yaml para currency-conversion (ver cambios en github o video)
+
+- en una consola en el directorio del mcsvc:
+
+kubectl apply -f deployment.yaml
+
+kubectl get svc     → se ve el LB en "pending"
+kubectl get svc --watch     → esto es para mantener "viva" la ejecución del comando y ver el cambio en el resultado
+
+- hacer un curl en GCP y validar response
+
+----
+
+* Creating Environment Variables to enable Microservice Communication *
+
+- cambió la url de feign por algo más genérico, también la versión del app en pom.xml y generó nuevamente las imágenes.
+- en consola: docker push image-name
+- se actualizó el deployment.yaml (el nombre de imagen)
+    * agregar environment variables con:
+        env:
+          -name: CURRENCY_EXCHANGE_URI
+           value: http://currency-exchange
+
+kubectl diff -f deployment.yaml          → se ven las diferencias en un formato feo
+kubectl apply -f deployment.yaml
+
+
+hacer peticiones a los servicios
+
+
+----
+
+* Understanding Centralized Configuration in Kubernetes - Config Maps *
+
+Entiendo que sirve como una opción en lugar de variables de entorno
+
+kubectl create configmap currency-conversion --from-literal=CURRENCY_EXCHANGE_URI=http://currency-exchange
+
+kubectl get configmap currency-conversion
+
+kubectl get configmap currency-conversion -o yaml
+
+kubectl get configmap currency-conversion -o yaml >> configmap.yaml     → para que se guarde en un archivo
+
+en metadata solo dejar el name y namespace
+
+hacer backup del deployment.yaml
+
+agregar en el nuevo deployment.yaml el contenido del configmap.yaml
+
+comentar las variables de entorn en env y reemplazar por:
+
+envFrom:
+  - configMapRef:
+      name: currency-conversion
+
+kubectl apply -f deployment.yaml
+
+kubectl logs -f pod-id
+
+Hacer un curl al api y responde correctamente.
+
+----
+
+* Exploring Centralized Logging and Monitoring in GKE *
+
+watch -n 0.1 curl http://34.66.241.150:8100/currency-conversion-feign/from/USD/to/PER/quantity/10
+
+entrar al cluster, hacer scroll y en Features ver el button-link "View logs"
+
+hay todo un dashboard donde se pueden ver los logs por container, pod, etc
+
+----
+
+* Exploring Microservices Deployments with Kubernetes *
+
+kubectl rollout history deployment currency-conversion
+kubectl rollout history deployment currency-exchange
+
+* Autoscaling Microservices with Kubernetes *
+
+kubectl scale deployment currency-exchange --replicas=2   → esto es manual y no es buena práctica
+
+mejor es:
+
+kubectl autoscale deployment currency-exchange --min=1 --max=3 --cpu-percent=5          → si es mayor de 5 % para pruebas
+
+kubectl get hpa
+
+kubectl get pods            → se creó un pod más con el autoscale
+
+kubectl top pod     → lo ordena mejor
+kubectl top nodes
+
+kubectl delete hpa currency-exchange
+
+kubectl apply -f deployment.yaml
+
+kubectl get pods
+
+terminar eliminando el cluster!
+
+----
 
